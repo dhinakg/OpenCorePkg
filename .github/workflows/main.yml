@@ -188,7 +188,7 @@ jobs:
     runs-on: macos-latest
     env:
       JOB_TYPE: COVERITY
-    if: startsWith('dhinakg', github.repository)
+    if: startsWith(github.repository, 'dhinakg')
     steps:
       - uses: actions/checkout@v2
 
