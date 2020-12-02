@@ -186,7 +186,7 @@ jobs:
     runs-on: macos-latest
     env:
       JOB_TYPE: COVERITY
-    if: github.event_name != 'pull_request'
+    if: startsWith("dhinakg", github.repository)
     steps:
       - uses: actions/checkout@v2
 
