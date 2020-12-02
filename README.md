@@ -6,16 +6,7 @@
 OpenCore bootloader with development SDK.
 
 ## Discussion
-
-- [AppleLife.ru](https://applelife.ru/threads/razrabotka-opencore.2943955) in Russian
-- [Hackintosh-Forum.de](https://www.hackintosh-forum.de/forum/thread/42353-opencore-bootloader) in German
-- [InsanelyMac.com](https://www.insanelymac.com/forum/topic/338527-opencore-development/) in English
-- [MacRumors.com](https://forums.macrumors.com/threads/opencore-on-the-mac-pro.2207814/) in English, legacy Apple hardware
-- [KVM-OpenCore](https://github.com/Leoyzen/KVM-Opencore) in English, KVM configuration
-- [macOS86.it](https://www.macos86.it/showthread.php?4570-OpenCore-aka-OC-Nuovo-BootLoader) in Italian
-- [PCbeta.com](http://bbs.pcbeta.com/viewthread-1815623-1-1.html) in Chinese
-
-## Libraries
+test
 
 This repository also contains additional UEFI support common libraries shared by other projects in [Acidanthera](https://github.com/acidanthera). The primary purpose of the library set is to provide supplemental functionality for Apple-specific UEFI drivers. Key features:
 
