@@ -54,6 +54,8 @@ jobs:
     name: Build Linux CLANGPDB/GCC5
     runs-on: ubuntu-latest
     steps:
+      - run: echo ${{ github.repository }}
+      - run: echo ${{ github.repository_owner }}
       - uses: actions/checkout@v2
 
       - name: Install Dependencies
