@@ -1057,6 +1057,19 @@ mProvideCurrentCpuInfoCoreCountPatch = {
   .Limit       = 0
 };
 
+STATIC CONST UINT8 mProvideCurrentCpuInfoCoreCountStartMask = 0xE0;
+
+STATIC CONST UINT8 mProvideCurrentCpuInfoCoreCountStart[3] = {
+  0xC1, 0xE0, 0x1A,               // shr eax/ebx/ecx/edx (mask), 0x1a
+}
+
+STATIC CONST UINT8 mProvideCurrentCpuInfoCoreCountMontereyEnd[3] = {
+  0x83, 0x00, 0x01,               // add register (filled in code), 1
+}
+
+STATIC CONST UINT8 mProvideCurrentCpuInfoCoreCountEnd[2] = {
+  0xFF, 0x00,               // inc register (filled in code)
+}
 STATIC
 UINT8* PatchMovVar (
   IN OUT  UINT8             *Location,
@@ -1166,6 +1179,13 @@ PatchProvideCurrentCpuInfo (
   UINT64            tscFCvtt2nValue;
   UINT64            tscFCvtn2tValue;
   UINT64            tscGranularityValue;
+
+  UINT8             *CpuidSetInfo;
+  UINT8             *Record;
+  UINT8             Register;
+
+  UINT32            Index;
+  BOOLEAN           Is64BitRegister;
 
   UINT32            msrCoreThreadCount;
   UINT32            CoreCount;
@@ -1313,38 +1333,86 @@ PatchProvideCurrentCpuInfo (
     DEBUG ((DEBUG_INFO, "OCAK: Skipping CPU MSR 0x35 default value patch on %u\n", KernelVersion));
   }
   
-  //
-  // CoreCount patch
-  //
-  if (OcMatchDarwinVersion (KernelVersion, KERNEL_VERSION_HIGH_SIERRA_MIN, 0)) {
-  if (OcMatchDarwinVersion (KernelVersion, KERNEL_VERSION_CATALINA_MIN, 0)) {
-    CopyMem ( &mProvideCurrentCpuInfoCoreCountReplace,
-      &mProvideCurrentCpuInfoCoreCountCatalinaMinReplace,
-      sizeof (mProvideCurrentCpuInfoCoreCountCatalinaMinReplace)
-      );
-  }
-  if (OcMatchDarwinVersion (KernelVersion, KERNEL_VERSION_MONTEREY_MIN, 0)) {
-    CopyMem ( &mProvideCurrentCpuInfoCoreCountReplace,
-      &mProvideCurrentCpuInfoCoreCountMontereyMinReplace,
-      sizeof (mProvideCurrentCpuInfoCoreCountMontereyMinReplace)
-      );
-      mProvideCurrentCpuInfoCoreCountPatch.ReplaceMask = mProvideCurrentCpuInfoCoreCountMontereyMinReplaceMask;
-  }
-    CoreCount = (UINT16) (CpuInfo->CoreCount);
 
-    CopyMem (
-      &mProvideCurrentCpuInfoCoreCountReplace[CORE_COUNT_OFFSET],
-      &CoreCount,
-      sizeof (CoreCount)
-      );
-
-      Status = PatcherApplyGenericPatch (
-        Patcher,
-        &mProvideCurrentCpuInfoCoreCountPatch
-        );
-      if (EFI_ERROR (Status)) {
-        DEBUG ((DEBUG_INFO, "OCAK: Failed to find cpuid_cores_per_package default value patch - %r\n", Status));
+  //
+  // Core count patch, v2
+  // TODO: Fix 10.8.5 case
+  //
+  if (OcMatchDarwinVersion (KernelVersion, KERNEL_VERSION_LION_MIN, 0)) {
+    Status = PatcherGetSymbolAddress (Patcher, "_cpuid_set_info", (UINT8 **) &CpuidSetInfo);
+    if (EFI_ERROR (Status)) {
+      DEBUG ((DEBUG_WARN, "OCAK: Failed to locate _cpuid_set_info - %r\n", Status));
+    } else {
+      DEBUG ((DEBUG_INFO, "OCAK: Located _cpuid_set_info (%p)\n", Record));
+      Record = CpuidSetInfo;
+      for (Index = 0; Index < EFI_PAGE_SIZE; Index++, Record++) {
+        if (Record[0] == mProvideCurrentCpuInfoCoreCountStart[0]
+          && (Record[1] & mProvideCurrentCpuInfoCoreCountStartMask) == mProvideCurrentCpuInfoCoreCountStart[1]
+          && Record[2] == mProvideCurrentCpuInfoCoreCountStart[2]) {
+            // In some cases, 64-bit registers are used.
+            Is64BitRegister = Record[3] == 0x41 ? TRUE : FALSE;
+            // Ugly but look i am not professional C coder
+            // Monterey uses add instead of inc.
+            if (OcMatchDarwinVersion (KernelVersion, KERNEL_VERSION_MONTEREY_MIN, 0)
+              && Record[3 + Is64BitRegister] == mProvideCurrentCpuInfoCoreCountMontereyEnd[0]
+              && Record[4 + Is64BitRegister] == Record[1] - 0xE8 + 0xC0
+              && Record[5 + Is64BitRegister] == mProvideCurrentCpuInfoCoreCountMontereyEnd[2]) {
+                DEBUG ((DEBUG_INFO, "OCAK: Located Monterey (add) (%a register) series of bytes (%p)\n", Is64BitRegister ? "64-bit" : "32-bit", Record));
+              break;
+            } else if (Record[3 + Is64BitRegister] == mProvideCurrentCpuInfoCoreCountEnd[0]
+                && Record[4 + Is64BitRegister] == Record[1] - 0xE8 + 0xC0) {
+              DEBUG ((DEBUG_INFO, "OCAK: Located non-Monterey (inc) (%a register) series of bytes (%p)\n", Is64BitRegister ? "64-bit" : "32-bit", Record));
+              break;
+            }
+        }
+      // In some cases, 64-bit registers are used.
+  /*     elif (Record[0] == 0x41
+        && Record[1] == mProvideCurrentCpuInfoCoreCountStart[0]
+        && Record[2] & 0xF0 == mProvideCurrentCpuInfoCoreCountStart[1]
+        && Record[3] == mProvideCurrentCpuInfoCoreCountStart[2]) {
+          // Monterey uses add instead of inc.
+          if (OcMatchDarwinVersion (KernelVersion, KERNEL_VERSION_MONTEREY_MIN, 0)
+            && Record[4] == mProvideCurrentCpuInfoCoreCountMontereyEnd[0]
+            && Record[5] == Record[2] - 0xE8 + 0xC0
+            && Record[6] == mProvideCurrentCpuInfoCoreCountMontereyEnd[2]) {
+            break;
+          } else if (Record[4] == mProvideCurrentCpuInfoCoreCountEnd[0]
+              && Record[5] == Record[2] - 0xE8 + 0xC0) {
+            break;
+          }
+        } */
       }
+
+      if (Index >= EFI_PAGE_SIZE) {
+        DEBUG ((DEBUG_INFO, "OCAK: Failed to find cpuid_cores_per_package default value patch\n"));
+      } else {
+        *Record++ = Record[1] - 0x30;
+        
+        // TODO: Convert to UINT32 instead?
+        CoreCount = (UINT16) (CpuInfo->CoreCount);
+        DEBUG ((DEBUG_INFO, "OCAK: Using core count %u\n", CoreCount));
+        CopyMem (Record, &CoreCount, sizeof (CoreCount));
+        
+        // We need additional zeros, target is 4 bytes.
+        for (Index = 1; Index <= 2; Index++) {
+          *Record++ = 0x00; // Filler
+        }
+
+        if (Is64BitRegister) {
+          // Add no-op.
+          DEBUG ((DEBUG_INFO, "OCAK: Adding 64-bit filler\n"));
+          *Record++ = 0x90;
+        }
+
+        if (OcMatchDarwinVersion (KernelVersion, KERNEL_VERSION_MONTEREY_MIN, 0)) {
+          // Add no-op as add is 3 bytes.
+          DEBUG ((DEBUG_INFO, "OCAK: Adding Monterey filler\n"));
+          *Record++ = 0x90;
+        }
+        DEBUG ((DEBUG_INFO, "OCAK: Done patching CPU count\n"));
+      }
+
+    }
   } else {
     DEBUG ((DEBUG_INFO, "OCAK: Skipping cpuid_cores_per_package patch on %u\n", KernelVersion));
   }
