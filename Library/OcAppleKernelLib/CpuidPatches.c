@@ -1061,15 +1061,15 @@ STATIC CONST UINT8 mProvideCurrentCpuInfoCoreCountStartMask = 0xE0;
 
 STATIC CONST UINT8 mProvideCurrentCpuInfoCoreCountStart[3] = {
   0xC1, 0xE0, 0x1A,               // shr eax/ebx/ecx/edx (mask), 0x1a
-}
+};
 
 STATIC CONST UINT8 mProvideCurrentCpuInfoCoreCountMontereyEnd[3] = {
   0x83, 0x00, 0x01,               // add register (filled in code), 1
-}
+};
 
 STATIC CONST UINT8 mProvideCurrentCpuInfoCoreCountEnd[2] = {
   0xFF, 0x00,               // inc register (filled in code)
-}
+};
 STATIC
 UINT8* PatchMovVar (
   IN OUT  UINT8             *Location,
@@ -1386,7 +1386,8 @@ PatchProvideCurrentCpuInfo (
       if (Index >= EFI_PAGE_SIZE) {
         DEBUG ((DEBUG_INFO, "OCAK: Failed to find cpuid_cores_per_package default value patch\n"));
       } else {
-        *Record++ = Record[1] - 0x30;
+        Register = Record[1];
+        *Record++ = Register - 0x30;
         
         // TODO: Convert to UINT32 instead?
         CoreCount = (UINT16) (CpuInfo->CoreCount);
