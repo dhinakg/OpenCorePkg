@@ -981,7 +981,7 @@ mProvideCurrentCpuInfoZeroMsrThreadCoreCountPatch = {
   .Limit       = 0
 };
 
-STATIC CONST UINT8 mProvideCurrentCpuInfoCoreCountStartMask = 0xE0;
+STATIC CONST UINT8 mProvideCurrentCpuInfoCoreCountStartMask = 0xF0;
 
 STATIC CONST UINT8 mProvideCurrentCpuInfoCoreCountStart[3] = {
   0xC1, 0xE0, 0x1A,               // shr eax/ebx/ecx/edx (mask), 0x1a
@@ -1262,17 +1262,24 @@ PatchProvideCurrentCpuInfo (
   // Core count patch, v2
   // TODO: Fix 10.8.5 case
   //
+  DEBUG ((DEBUG_WARN, "OCAK: Start locate _cpuid_set_info\n"));
   if (OcMatchDarwinVersion (KernelVersion, KERNEL_VERSION_LION_MIN, 0)) {
     Status = PatcherGetSymbolAddress (Patcher, "_cpuid_set_info", (UINT8 **) &CpuidSetInfo);
     if (EFI_ERROR (Status)) {
       DEBUG ((DEBUG_WARN, "OCAK: Failed to locate _cpuid_set_info - %r\n", Status));
     } else {
       DEBUG ((DEBUG_INFO, "OCAK: Located _cpuid_set_info (%p)\n", CpuidSetInfo));
+      DEBUG ((DEBUG_INFO, "OCAK: Start is %p\n", Start));
+      // DEBUG ((DEBUG_INFO, "OCAK: Symbol minus start is (%p)\n", CpuidSetInfo - Start));
+      // DEBUG ((DEBUG_INFO, "OCAK: Symbol minus start is (%u)\n", CpuidSetInfo - Start));
+      DEBUG ((DEBUG_INFO, "OCAK: Symbol offset is 0x%x\n", CpuidSetInfo - Start));
+
       Record = CpuidSetInfo;
-      for (Index = 0; Index < EFI_PAGE_SIZE; Index++, Record++) {
+      for (Index = 0; Index < 2 * EFI_PAGE_SIZE; Index++, Record++) {
         if (Record[0] == mProvideCurrentCpuInfoCoreCountStart[0]
           && (Record[1] & mProvideCurrentCpuInfoCoreCountStartMask) == mProvideCurrentCpuInfoCoreCountStart[1]
           && Record[2] == mProvideCurrentCpuInfoCoreCountStart[2]) {
+            DEBUG ((DEBUG_INFO, "OCAK: Located starter series of bytes (%p), offset 0x%x\n", Record, Record - Start));
             // In some cases, 64-bit registers are used.
             Is64BitRegister = Record[3] == 0x41 ? TRUE : FALSE;
             // Ugly but look i am not professional C coder
@@ -1281,11 +1288,11 @@ PatchProvideCurrentCpuInfo (
               && Record[3 + Is64BitRegister] == mProvideCurrentCpuInfoCoreCountMontereyEnd[0]
               && Record[4 + Is64BitRegister] == Record[1] - 0xE8 + 0xC0
               && Record[5 + Is64BitRegister] == mProvideCurrentCpuInfoCoreCountMontereyEnd[2]) {
-                DEBUG ((DEBUG_INFO, "OCAK: Located Monterey (add) (%a register) series of bytes (%p)\n", Is64BitRegister ? "64-bit" : "32-bit", Record));
+                DEBUG ((DEBUG_INFO, "OCAK: Located Monterey (add) (%a register) series of bytes (%p), offset 0x%x\n", Is64BitRegister ? "64-bit" : "32-bit", Record, Record - Start));
               break;
             } else if (Record[3 + Is64BitRegister] == mProvideCurrentCpuInfoCoreCountEnd[0]
                 && Record[4 + Is64BitRegister] == Record[1] - 0xE8 + 0xC0) {
-              DEBUG ((DEBUG_INFO, "OCAK: Located non-Monterey (inc) (%a register) series of bytes (%p)\n", Is64BitRegister ? "64-bit" : "32-bit", Record));
+              DEBUG ((DEBUG_INFO, "OCAK: Located non-Monterey (inc) (%a register) series of bytes (%p), offset 0x%x\n", Is64BitRegister ? "64-bit" : "32-bit", Record, Record - Start));
               break;
             }
         }
@@ -1307,22 +1314,23 @@ PatchProvideCurrentCpuInfo (
         } */
       }
 
-      if (Index >= EFI_PAGE_SIZE) {
+      if (Index >= 2 * EFI_PAGE_SIZE) {
         DEBUG ((DEBUG_INFO, "OCAK: Failed to find cpuid_cores_per_package default value patch\n"));
       } else {
         Register = Record[1];
         *Record++ = Register - 0x30;
         
         // TODO: Convert to UINT32 instead?
-        CoreCount = (UINT16) (CpuInfo->CoreCount);
-        DEBUG ((DEBUG_INFO, "OCAK: Using core count %u\n", CoreCount));
+        CoreCount = (UINT32) (CpuInfo->CoreCount);
+        // CoreCount = (UINT32)8;
+        DEBUG ((DEBUG_INFO, "OCAK: Using core count %u (size %u)\n", CoreCount, sizeof (CoreCount)));
         CopyMem (Record, &CoreCount, sizeof (CoreCount));
         Record += sizeof (CoreCount);
         
         // We need additional zeros, target is 4 bytes.
-        for (Index = 1; Index <= 2; Index++) {
-          *Record++ = 0x00; // Filler
-        }
+        // for (Index = 1; Index <= 2; Index++) {
+        //   *Record++ = 0x00; // Filler
+        // }
 
         if (Is64BitRegister) {
           // Add no-op.
