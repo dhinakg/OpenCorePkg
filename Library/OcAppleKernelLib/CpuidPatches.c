@@ -1317,6 +1317,7 @@ PatchProvideCurrentCpuInfo (
         CoreCount = (UINT16) (CpuInfo->CoreCount);
         DEBUG ((DEBUG_INFO, "OCAK: Using core count %u\n", CoreCount));
         CopyMem (Record, &CoreCount, sizeof (CoreCount));
+        Record += sizeof (CoreCount);
         
         // We need additional zeros, target is 4 bytes.
         for (Index = 1; Index <= 2; Index++) {
