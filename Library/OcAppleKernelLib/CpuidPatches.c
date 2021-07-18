@@ -1343,7 +1343,7 @@ PatchProvideCurrentCpuInfo (
     if (EFI_ERROR (Status)) {
       DEBUG ((DEBUG_WARN, "OCAK: Failed to locate _cpuid_set_info - %r\n", Status));
     } else {
-      DEBUG ((DEBUG_INFO, "OCAK: Located _cpuid_set_info (%p)\n", Record));
+      DEBUG ((DEBUG_INFO, "OCAK: Located _cpuid_set_info (%p)\n", CpuidSetInfo));
       Record = CpuidSetInfo;
       for (Index = 0; Index < EFI_PAGE_SIZE; Index++, Record++) {
         if (Record[0] == mProvideCurrentCpuInfoCoreCountStart[0]
