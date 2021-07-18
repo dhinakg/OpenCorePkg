@@ -1260,7 +1260,7 @@ PatchProvideCurrentCpuInfo (
 
   //
   // Core count patch, v2
-  // TODO: Fix 10.8.5 case
+  // TODO: Check _cpuid_wa_required instead for newer OSes which seems to be closer
   //
   DEBUG ((DEBUG_WARN, "OCAK: Start locate _cpuid_set_info\n"));
   if (OcMatchDarwinVersion (KernelVersion, KERNEL_VERSION_LION_MIN, 0)) {
@@ -1275,7 +1275,7 @@ PatchProvideCurrentCpuInfo (
       DEBUG ((DEBUG_INFO, "OCAK: Symbol offset is 0x%x\n", CpuidSetInfo - Start));
 
       Record = CpuidSetInfo;
-      for (Index = 0; Index < 2 * EFI_PAGE_SIZE; Index++, Record++) {
+      for (Index = 0; Index < 4 * EFI_PAGE_SIZE; Index++, Record++) {
         if (Record[0] == mProvideCurrentCpuInfoCoreCountStart[0]
           && (Record[1] & mProvideCurrentCpuInfoCoreCountStartMask) == mProvideCurrentCpuInfoCoreCountStart[1]
           && Record[2] == mProvideCurrentCpuInfoCoreCountStart[2]) {
@@ -1314,7 +1314,7 @@ PatchProvideCurrentCpuInfo (
         } */
       }
 
-      if (Index >= 2 * EFI_PAGE_SIZE) {
+      if (Index >= 4 * EFI_PAGE_SIZE) {
         DEBUG ((DEBUG_INFO, "OCAK: Failed to find cpuid_cores_per_package default value patch\n"));
       } else {
         Register = Record[1];
